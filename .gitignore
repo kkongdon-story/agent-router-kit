@@ -1,0 +1,25 @@
+# Secrets
+.env
+*.env
+!.env.example
+secrets/
+
+# Runtime state
+logs/
+runs/
+sessions/
+state/
+workspace/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+

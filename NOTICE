@@ -1,0 +1,10 @@
+agent-router-kit
+
+This project is inspired by the public project:
+
+  orot-ai/agent-bootstrap
+  https://github.com/orot-ai/agent-bootstrap
+
+agent-router-kit is distributed as a separate public kit focused on AI-assisted installation of a Slack-based personal agent router. It is not an official release of orot-ai/agent-bootstrap.
+
+The router template, installer flow, KMS workspace structure, and optional SMS/Kakao module packaging have been adapted for this project.

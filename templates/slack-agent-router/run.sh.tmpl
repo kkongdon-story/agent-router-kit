@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export AGENT_ROUTER_ENV="{ENV_FILE}"
+export AGENT_ROUTER_HOME="{AGENT_ROUTER_HOME}"
+exec "{PYTHON_EXE}" "{DAEMON_PY}"
+

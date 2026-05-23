@@ -1,0 +1,5 @@
+$ErrorActionPreference = "Stop"
+
+$env:AGENT_ROUTER_ENV = "{ENV_FILE}"
+$env:AGENT_ROUTER_HOME = "{AGENT_ROUTER_HOME}"
+& "{PYTHON_EXE}" "{DAEMON_PY}"
