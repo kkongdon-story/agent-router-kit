@@ -109,6 +109,9 @@ Slack은 기본적으로 조작 인터페이스입니다. 명시적으로 저장
 
 - `INSTALL_WITH_AI.md`: Claude/Codex에게 그대로 던지는 설치 안내
 - `SKILL.md`: AI 설치 에이전트용 상세 절차
+- `docs/beginner-tutorial.md`: 자동화 입문자용 설치 튜토리얼
+- `docs/feature-reference.md`: 명령, env, 폴더, 선택 모듈 레퍼런스
+- `docs/e2e-checklist.md`: 새 설치 기준 실전 E2E 체크리스트
 - `modules/01-slack-router.md`: Slack router 설정
 - `modules/02-local-workspace.md`: local workspace 구조
 - `modules/03-sms-input.md`: Android Tasker/iPhone Shortcuts SMS 입력
@@ -116,6 +119,22 @@ Slack은 기본적으로 조작 인터페이스입니다. 명시적으로 저장
 - `docs/security.md`: 보안 체크리스트
 - `docs/troubleshooting.md`: 자주 막히는 지점
 - `docs/demo-script.md`: 설치 시연 흐름
+- `docs/presentation/agent-router-kit-deck.json`: PPT 제작용 범용 JSON
+- `docs/presentation/agent-router-kit-script.md`: 8분 발표 대본
+
+## 배포 전 검증
+
+릴리스 전에 다음 명령으로 공개 안전 스캔, 설치 smoke, router intent, 문서 일관성, 선택 입력 모듈을 확인합니다.
+
+```powershell
+.\scripts\verify-release.ps1
+```
+
+Python 경로를 직접 지정해야 하면 다음처럼 실행합니다.
+
+```powershell
+.\scripts\verify-release.ps1 -PythonExe "C:\Path\To\python.exe"
+```
 
 ## v1 범위
 

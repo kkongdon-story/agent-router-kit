@@ -87,6 +87,17 @@ class RouterIntentTests(unittest.TestCase):
         self.assertEqual("workspace_action", intent["intent"])
         self.assertTrue(intent["clear_debate"])
 
+    def test_official_names_and_aliases_route_to_expected_agents(self):
+        self.assertEqual("codex", self.daemon.parse_route("코덱스 안녕")[0])
+        self.assertEqual("claude", self.daemon.parse_route("클로드 안녕")[0])
+        self.assertEqual("codex", self.daemon.parse_route("덱스 안녕")[0])
+        self.assertEqual("claude", self.daemon.parse_route("클로 안녕")[0])
+
+    def test_workspace_task_command_is_not_debate(self):
+        intent = self.daemon.classify_router_intent("업무 할일 테스트 작업 추가", "C_TEST")
+        self.assertEqual("workspace_task", intent["intent"])
+        self.assertTrue(intent["clear_debate"])
+
     def test_debate_continuation_requires_active_debate(self):
         self.daemon.clear_debate_state("C_TEST")
         self.assertEqual("agent_chat", self.daemon.classify_router_intent("다음", "C_TEST")["intent"])

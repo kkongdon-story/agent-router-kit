@@ -128,6 +128,12 @@ CODEX_EXE=codex
 
 ## Verification
 
+Before real Slack token testing, run the public release verifier when possible:
+
+```powershell
+.\scripts\verify-release.ps1
+```
+
 Send these in Slack:
 
 ```text
@@ -164,6 +170,14 @@ Kakao:
 - `ENABLE_KAKAO=1`
 - v1 is Windows PC Kakao first.
 - Collect only rooms the user intentionally opens or exports through the configured reader.
+
+## User-facing Docs
+
+- `docs/beginner-tutorial.md`: step-by-step tutorial for non-developers.
+- `docs/feature-reference.md`: commands, env variables, aliases, folder layout, and optional modules.
+- `docs/e2e-checklist.md`: fresh install and real Slack connection checklist.
+- `docs/presentation/agent-router-kit-deck.json`: tool-independent presentation JSON.
+- `docs/presentation/agent-router-kit-script.md`: beginner-friendly presentation script.
 
 ## Troubleshooting
 

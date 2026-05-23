@@ -28,6 +28,72 @@ LEGACY_RULES_PATH = LEGACY_SMS_DIR / "classification-rules.json"
 DB_PATH = SMS_DIR / "sms-events.sqlite"
 JSONL_PATH = SMS_DIR / "sms-events.jsonl"
 
+DEFAULT_RULES: dict[str, Any] = {
+    "version": 1,
+    "privacy": {
+        "local_raw_text": True,
+    },
+    "task_triggers": {
+        "must_task_keywords": [
+            "문의",
+            "가능할까요",
+            "확인 부탁",
+            "답변",
+            "연락",
+            "미팅",
+            "회의",
+            "예약",
+            "처리",
+            "요청",
+        ],
+        "never_task_keywords": [
+            "광고",
+            "수신거부",
+            "인증번호",
+            "인증 코드",
+            "OTP",
+        ],
+    },
+    "lanes": {
+        "card_usage": {
+            "label": "카드 사용",
+            "keywords": ["카드", "승인", "사용", "일시불", "체크", "결제"],
+            "amount_required": True,
+            "task_default": False,
+        },
+        "deposit": {
+            "label": "입금",
+            "keywords": ["입금", "받았습니다", "이체입금", "입금완료"],
+            "amount_required": True,
+            "task_default": False,
+        },
+        "withdrawal": {
+            "label": "출금",
+            "keywords": ["출금", "이체", "송금", "자동이체", "결제완료"],
+            "amount_required": True,
+            "task_default": False,
+        },
+        "inquiry": {
+            "label": "문의",
+            "keywords": ["문의", "가능할까요", "언제", "미팅", "회의", "연락", "답변"],
+            "amount_required": False,
+            "task_default": True,
+        },
+        "verification": {
+            "label": "인증",
+            "keywords": ["인증", "인증번호", "OTP", "보안코드", "verification"],
+            "amount_required": False,
+            "task_default": False,
+        },
+        "notification": {
+            "label": "알림",
+            "keywords": ["알림", "안내", "공지", "완료", "배송", "도착"],
+            "amount_required": False,
+            "task_default": False,
+        },
+    },
+}
+
 
 AMOUNT_RE = re.compile(r"(?P<amount>\d{1,3}(?:,\d{3})+|\d+)\s*(?:원|KRW)", re.IGNORECASE)
 ANY_AMOUNT_RE = re.compile(
@@ -64,6 +130,14 @@ def now_iso() -> str:
     return datetime.now().astimezone().replace(microsecond=0).isoformat()
 
 
+def force_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass
+
+
 def normalize_received_at(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -75,7 +149,9 @@ def normalize_received_at(value: Any) -> str:
 
 def load_rules() -> dict[str, Any]:
     path = RULES_PATH if RULES_PATH.is_file() else LEGACY_RULES_PATH
-    return json.loads(path.read_text(encoding="utf-8"))
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return DEFAULT_RULES
 
 
 def ensure_dirs() -> None:
@@ -597,6 +673,7 @@ def self_test() -> None:
 
 
 def main() -> int:
+    force_utf8_stdio()
     parser = argparse.ArgumentParser(description="Ingest SMS payloads into the local workspace SMS ledger.")
     parser.add_argument("--json", help="Single JSON payload string.")
     parser.add_argument("--file", help="JSON or JSONL payload file.")

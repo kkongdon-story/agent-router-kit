@@ -10,6 +10,7 @@
 - 토큰은 절대 채팅창에 붙여넣지 않게 안내하세요.
 - 실제 토큰은 로컬 secrets env 파일에만 입력하게 해 주세요.
 - 설치 전 DryRun을 먼저 실행해 주세요.
+- 설치 후 가능하면 scripts/verify-release.ps1로 로컬 검증을 실행해 주세요.
 - 내 OS가 Windows인지 macOS인지 확인하고 해당 스크립트를 사용해 주세요.
 - 기본 설치는 Slack Router + local workspace입니다.
 - SMS/Kakao는 선택 모듈로, 내가 명시적으로 원할 때만 켜 주세요.
@@ -39,6 +40,7 @@ AI에게 토큰 값을 보내지 마세요.
 4. env 파일 위치를 알려주고, 사용자가 직접 값을 넣도록 안내한다.
 5. 라우터를 실행하고 로그를 확인한다.
 6. Slack 테스트 메시지로 동작을 검증한다.
+7. 배포판 자체 점검이 필요하면 `scripts/verify-release.ps1`을 실행한다.
 
 ## 추천 기본값
 
@@ -55,3 +57,9 @@ bash ./scripts/install-macos.sh --enable-workspace
 ```
 
 자동 시작까지 원하면 Windows는 `-RegisterTask`, macOS는 `--register-launchd`를 추가합니다.
+
+## 추가 확인 문서
+
+- `docs/beginner-tutorial.md`: 처음 설치하는 사람용 순서
+- `docs/feature-reference.md`: 기능과 명령어 사전
+- `docs/e2e-checklist.md`: 실제 Slack 연결 체크리스트
