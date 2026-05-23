@@ -83,8 +83,8 @@ class RouterIntentTests(unittest.TestCase):
                 "updated_epoch": __import__("time").time(),
             },
         )
-        intent = self.daemon.classify_router_intent("덱스, 카카오에서 나에게 보내는 방을 참조해 들어온 할 일 정리해줘", "C_TEST")
-        self.assertEqual("kms_action", intent["intent"])
+        intent = self.daemon.classify_router_intent("코덱스, 카카오에서 나에게 보내는 방을 참조해 들어온 할 일 정리해줘", "C_TEST")
+        self.assertEqual("workspace_action", intent["intent"])
         self.assertTrue(intent["clear_debate"])
 
     def test_debate_continuation_requires_active_debate(self):

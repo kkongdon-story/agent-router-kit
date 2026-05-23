@@ -2,21 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from sms_ingest import ingest_payload, now_iso
 
-try:
-    from sms_notion_sync import sync_pending
-except ImportError:
-    sync_pending = None
-
 
 ROOT = Path(__file__).resolve().parents[1]
-BAD_REQUEST_LOG = ROOT / "workspace" / "kms" / "ledger" / "sms" / "logs" / "bad-requests.jsonl"
+BAD_REQUEST_LOG = ROOT / "ledger" / "sms" / "logs" / "bad-requests.jsonl"
 
 
 def parse_payload(raw: str) -> dict:
@@ -45,7 +39,7 @@ def log_bad_request(raw: str, error: Exception) -> None:
 
 
 class SMSHandler(BaseHTTPRequestHandler):
-    server_version = "KmsSmsReceiver/0.1"
+    server_version = "AgentRouterSmsReceiver/0.1"
 
     def _send_json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -71,15 +65,6 @@ class SMSHandler(BaseHTTPRequestHandler):
         try:
             payload = parse_payload(raw)
             event = ingest_payload(payload)
-            notion_sync = {}
-            if os.environ.get("KMS_SMS_SYNC_NOTION") == "1":
-                try:
-                    if sync_pending is None:
-                        notion_sync = {"ok": False, "error": "notion_sync_unavailable"}
-                    else:
-                        notion_sync = sync_pending(limit=20)
-                except Exception as exc:
-                    notion_sync = {"ok": False, "error": type(exc).__name__, "message": str(exc)}
         except Exception as exc:  # keep phone automation response compact
             log_bad_request(raw, exc)
             self._send_json(400, {"ok": False, "error": type(exc).__name__, "message": str(exc)})
@@ -93,7 +78,6 @@ class SMSHandler(BaseHTTPRequestHandler):
                 "category": event["category"],
                 "action_needed": event["action_needed"],
                 "task_path": event.get("task_path", ""),
-                "notion_sync": notion_sync,
             },
         )
 
@@ -102,13 +86,13 @@ class SMSHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run local KMS SMS HTTP receiver.")
+    parser = argparse.ArgumentParser(description="Run local workspace SMS HTTP receiver.")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8788)
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), SMSHandler)
-    print(f"KMS SMS receiver listening on http://{args.host}:{args.port}/sms")
+    print(f"Agent Router SMS receiver listening on http://{args.host}:{args.port}/sms")
     server.serve_forever()
     return 0
 

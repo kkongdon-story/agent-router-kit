@@ -6,7 +6,7 @@ WORKSPACE_ROOT="$HOME/agent-router-workspace"
 PROJECT_ROOT="$HOME/agent-router-projects"
 PYTHON_EXE="python3"
 REGISTER_LAUNCHD=0
-ENABLE_KMS=0
+ENABLE_WORKSPACE=0
 ENABLE_SMS=0
 ENABLE_KAKAO=0
 DRY_RUN=0
@@ -18,9 +18,9 @@ while [[ $# -gt 0 ]]; do
     --project-root) PROJECT_ROOT="$2"; shift 2 ;;
     --python) PYTHON_EXE="$2"; shift 2 ;;
     --register-launchd) REGISTER_LAUNCHD=1; shift ;;
-    --enable-kms) ENABLE_KMS=1; shift ;;
-    --enable-sms) ENABLE_SMS=1; ENABLE_KMS=1; shift ;;
-    --enable-kakao) ENABLE_KAKAO=1; ENABLE_KMS=1; shift ;;
+    --enable-workspace) ENABLE_WORKSPACE=1; shift ;;
+    --enable-sms) ENABLE_SMS=1; ENABLE_WORKSPACE=1; shift ;;
+    --enable-kakao) ENABLE_KAKAO=1; ENABLE_WORKSPACE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -29,7 +29,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROUTER_SOURCE="$REPO_ROOT/templates/slack-agent-router"
-KMS_SOURCE="$REPO_ROOT/templates/kms"
+INPUT_SOURCE="$REPO_ROOT/templates/workspace-inputs"
 ROUTER_HOME="$INSTALL_ROOT/slack-agent-router"
 SECRETS_DIR="$INSTALL_ROOT/secrets"
 ENV_FILE="$SECRETS_DIR/slack-agent-router.env"
@@ -50,14 +50,15 @@ run() {
 run "Create install folders" mkdir -p "$ROUTER_HOME/logs" "$ROUTER_HOME/runs" "$ROUTER_HOME/sessions" "$ROUTER_HOME/state" "$SECRETS_DIR" "$WORKSPACE_ROOT" "$PROJECT_ROOT"
 run "Copy Slack router template" cp "$ROUTER_SOURCE/daemon.py" "$ROUTER_SOURCE/README.md" "$ROUTER_HOME/"
 
-if [[ "$ENABLE_KMS" -eq 1 ]]; then
-  say "Create KMS workspace and copy optional SMS/Kakao scripts"
+if [[ "$ENABLE_WORKSPACE" -eq 1 ]]; then
+  say "Create local workspace and copy optional SMS/Kakao scripts"
   if [[ "$DRY_RUN" -eq 0 ]]; then
-    mkdir -p "$WORKSPACE_ROOT"/workspace/kms/inputs/{slack,sms,kakao,folder}
-    mkdir -p "$WORKSPACE_ROOT"/workspace/kms/processed/{tasks,memos,finance,schedules,content,questions,noise}
-    mkdir -p "$WORKSPACE_ROOT"/workspace/kms/ledger/{sms,kakao,logs}
+    mkdir -p "$WORKSPACE_ROOT"/inputs/{slack,sms,kakao,folder}
+    mkdir -p "$WORKSPACE_ROOT"/processed/{tasks,memos,finance,schedules,content,questions,noise}
+    mkdir -p "$WORKSPACE_ROOT"/ledger/{sms,kakao,logs}
+    mkdir -p "$WORKSPACE_ROOT"/system/slack
     mkdir -p "$WORKSPACE_ROOT/scripts"
-    cp "$KMS_SOURCE"/*.py "$WORKSPACE_ROOT/scripts/"
+    cp "$INPUT_SOURCE"/*.py "$WORKSPACE_ROOT/scripts/"
   fi
 fi
 
@@ -76,7 +77,7 @@ fi
 
 say "Create env file if missing"
 if [[ "$DRY_RUN" -eq 0 && ! -f "$ENV_FILE" ]]; then
-  sed "s|{USER_HOME}|$HOME|g; s|WORKSPACE_ROOT=.*|WORKSPACE_ROOT=$WORKSPACE_ROOT|; s|AGENT_WORKDIR=.*|AGENT_WORKDIR=$WORKSPACE_ROOT|; s|PROJECT_ROOT=.*|PROJECT_ROOT=$PROJECT_ROOT|; s|ENABLE_KMS=.*|ENABLE_KMS=$ENABLE_KMS|; s|ENABLE_SMS=.*|ENABLE_SMS=$ENABLE_SMS|; s|ENABLE_KAKAO=.*|ENABLE_KAKAO=$ENABLE_KAKAO|" "$ROUTER_SOURCE/slack-agent-router.env.example" > "$ENV_FILE"
+  sed "s|{USER_HOME}|$HOME|g; s|WORKSPACE_ROOT=.*|WORKSPACE_ROOT=$WORKSPACE_ROOT|; s|AGENT_WORKDIR=.*|AGENT_WORKDIR=$WORKSPACE_ROOT|; s|PROJECT_ROOT=.*|PROJECT_ROOT=$PROJECT_ROOT|; s|ENABLE_WORKSPACE=.*|ENABLE_WORKSPACE=$ENABLE_WORKSPACE|; s|ENABLE_SMS=.*|ENABLE_SMS=$ENABLE_SMS|; s|ENABLE_KAKAO=.*|ENABLE_KAKAO=$ENABLE_KAKAO|" "$ROUTER_SOURCE/slack-agent-router.env.example" > "$ENV_FILE"
   chmod 600 "$ENV_FILE"
 fi
 
@@ -117,7 +118,7 @@ EnvFile=$ENV_FILE
 RunFile=$RUN_FILE
 WorkspaceRoot=$WORKSPACE_ROOT
 ProjectRoot=$PROJECT_ROOT
-KmsEnabled=$ENABLE_KMS
+WorkspaceEnabled=$ENABLE_WORKSPACE
 SmsEnabled=$ENABLE_SMS
 KakaoEnabled=$ENABLE_KAKAO
 LaunchdRegistered=$REGISTER_LAUNCHD

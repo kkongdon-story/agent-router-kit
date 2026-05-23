@@ -70,25 +70,32 @@ BOT_NAME = ENV.get("SLACK_BOT_NAME", "Slack Agent Router").strip() or "Slack Age
 DEFAULT_AGENT = (ENV.get("DEFAULT_AGENT", "claude").strip().lower() or "claude")
 AGENT_WORKDIR = Path(ENV.get("AGENT_WORKDIR", str(HOME / "agent-router-workspace"))).expanduser()
 PROJECT_ROOT = Path(ENV.get("PROJECT_ROOT", str(HOME / "agent-router-projects"))).expanduser()
-WORKSPACE_ROOT = Path(ENV.get("WORKSPACE_ROOT", ENV.get("MANAGER_ROOT", str(HOME / "agent-router-workspace")))).expanduser()
-MANAGER_ROOT = WORKSPACE_ROOT
-MANAGER_SHARED_CONTEXT = MANAGER_ROOT / "workspace" / "system" / "slack" / "shared-context.md"
-MANAGER_SLACK_SYNC = MANAGER_ROOT / "scripts" / "sync-slack-outbox.ps1"
-KMS_ROOT = MANAGER_ROOT / "workspace" / "kms"
-KMS_INPUTS_DIR = KMS_ROOT / "inputs"
-KMS_PROCESSED_DIR = KMS_ROOT / "processed"
-KMS_TASKS_DIR = KMS_PROCESSED_DIR / "tasks"
-KMS_KAKAO_INPUTS_DIR = KMS_INPUTS_DIR / "kakao"
-KMS_KAKAO_LEDGER_DIR = KMS_ROOT / "ledger" / "kakao"
-LEGACY_TASKS_DIR = MANAGER_ROOT / "workspace" / "user" / "tasks"
+WORKSPACE_ROOT = Path(ENV.get("WORKSPACE_ROOT", str(HOME / "agent-router-workspace"))).expanduser()
+WORKSPACE_SHARED_CONTEXT = WORKSPACE_ROOT / "system" / "slack" / "shared-context.md"
+WORKSPACE_SLACK_SYNC = WORKSPACE_ROOT / "scripts" / "sync-slack-outbox.ps1"
+LOCAL_WORKSPACE_ROOT = WORKSPACE_ROOT
+WORKSPACE_INPUTS_DIR = LOCAL_WORKSPACE_ROOT / "inputs"
+WORKSPACE_PROCESSED_DIR = LOCAL_WORKSPACE_ROOT / "processed"
+WORKSPACE_TASKS_DIR = WORKSPACE_PROCESSED_DIR / "tasks"
+WORKSPACE_KAKAO_INPUTS_DIR = WORKSPACE_INPUTS_DIR / "kakao"
+WORKSPACE_KAKAO_LEDGER_DIR = LOCAL_WORKSPACE_ROOT / "ledger" / "kakao"
 CLAUDE_EXE = ENV.get("CLAUDE_EXE", "claude")
 CLAUDE_MODEL = ENV.get("CLAUDE_MODEL", "").strip()
 CODEX_EXE = ENV.get("CODEX_EXE", ENV.get("CODEX_PS1", "codex")).strip() or "codex"
 POWERSHELL_EXE = ENV.get("POWERSHELL_EXE", "pwsh")
 AGENT_TIMEOUT_SEC = int(ENV.get("AGENT_TIMEOUT_SEC", "900"))
+def _csv_env(name: str, default: str) -> list[str]:
+    values = [part.strip() for part in ENV.get(name, default).split(",")]
+    return [part for part in values if part]
+
+
+CLAUDE_DISPLAY_NAME = ENV.get("CLAUDE_DISPLAY_NAME", "클로드").strip() or "클로드"
+CODEX_DISPLAY_NAME = ENV.get("CODEX_DISPLAY_NAME", "코덱스").strip() or "코덱스"
+CLAUDE_ALIASES = _csv_env("CLAUDE_ALIASES", "클로드,claude,클로")
+CODEX_ALIASES = _csv_env("CODEX_ALIASES", "코덱스,codex,덱스")
 AGENT_DISPLAY = {
-    "claude": "클로",
-    "codex": "덱스",
+    "claude": CLAUDE_DISPLAY_NAME,
+    "codex": CODEX_DISPLAY_NAME,
 }
 DEBATE_STATE_TTL_SEC = int(ENV.get("DEBATE_STATE_TTL_SEC", str(12 * 60 * 60)))
 DEBATE_MESSAGE_DELAY_SEC = float(ENV.get("DEBATE_MESSAGE_DELAY_SEC", "0.35"))
@@ -253,8 +260,8 @@ SYSTEM_PROMPT = f"""You are a Slack-based coding assistant for {USER_NAME}.
 Answer in Korean unless the user asks otherwise. Be concise in Slack.
 Start from the configured Slack agent workspace.
 Use project materials only when the user explicitly asks with "자료", "프로젝트", or the Korean context alias "업무".
-"업무" means the user's main KMS workspace. "작업" means the light inbox/workspace context.
-When answering 업무, 오늘 할 일, 할 일, 일정, or 참고 일정, use the KMS shared context first if it is provided.
+"업무" means the user's main local workspace. "작업" means the light inbox/workspace context.
+When answering 업무, 오늘 할 일, 할 일, 일정, or 참고 일정, use the local workspace shared context first if it is provided.
 When the router provides Debate Mode instructions, stay inside debate: do not inspect inbox/outbox or run file routing unless the user explicitly asks for file or folder handling.
 When project materials are enabled, treat them as reference-only unless the user explicitly asks for edits.
 Do not print secrets or tokens."""
@@ -449,9 +456,9 @@ CONTEXTS = {
     },
     "work": {
         "label": "업무",
-        "path": MANAGER_ROOT,
+        "path": WORKSPACE_ROOT,
         "project_access": True,
-        "note": "깊은 업무/KMS workspace 기준입니다. 일정, 콘텐츠, 고민, 운영 판단은 이 폴더 맥락을 우선하세요.",
+        "note": "깊은 업무/local workspace 기준입니다. 일정, 콘텐츠, 고민, 운영 판단은 이 폴더 맥락을 우선하세요.",
     },
     "light": {
         "label": "작업",
@@ -466,7 +473,7 @@ def strip_named_context_prefix(text: str) -> tuple[dict[str, object] | None, str
     stripped = text.strip()
     lowered = stripped.lower()
     context_prefixes = (
-        ("work", ("업무 ", "업무:", "work ", "work:", "깊은 업무 ", "깊은업무 ", "kms ", "kms:")),
+        ("work", ("업무 ", "업무:", "work ", "work:", "깊은 업무 ", "깊은업무 ", "workspace ", "workspace:", "local workspace ", "local workspace:")),
         ("light", ("작업 ", "작업:", "가벼운 작업 ", "가벼운작업 ", "인박스 ", "인박스:", "수집함 ", "수집함:")),
     )
     for context_name, prefixes in context_prefixes:
@@ -501,41 +508,14 @@ def apply_context_note(prompt: str, context: dict[str, object] | None) -> str:
 def _strip_optional_agent_prefix(text: str) -> str:
     stripped = text.strip()
     lowered = stripped.lower()
-    prefixes = (
-        "클로야",
-        "클로:",
-        "클로,",
-        "클로 ",
-        "!클로",
-        "/클로",
-        "클로드야",
-        "클로드:",
-        "클로드,",
-        "클로드 ",
-        "!claude",
-        "/claude",
-        "claude:",
-        "덱스야",
-        "덱스:",
-        "덱스,",
-        "덱스 ",
-        "!덱스",
-        "/덱스",
-        "코덱스야",
-        "코덱스:",
-        "코덱스,",
-        "코덱스 ",
-        "!codex",
-        "/codex",
-        "codex:",
-    )
+    prefixes = agent_prefixes()
     for prefix in prefixes:
         if lowered.startswith(prefix.lower()):
             return stripped[len(prefix) :].strip()
     return stripped
 
 
-def parse_manager_task_command(text: str) -> str | None:
+def parse_workspace_task_command(text: str) -> str | None:
     stripped = _strip_optional_agent_prefix(text)
     _, stripped, context = consume_context_prefix(stripped)
     if not context or context.get("label") != "업무":
@@ -566,24 +546,53 @@ def parse_manager_task_command(text: str) -> str | None:
 def strip_both_agents_prefix(text: str) -> tuple[bool, str]:
     stripped = text.strip()
     lowered = stripped.lower()
-    prefixes = (
+    prefixes = [
         "둘 다 ",
         "둘다 ",
         "둘 모두 ",
         "둘이 ",
         "둘 다:",
         "둘다:",
-        "덱스랑 클로 ",
-        "클로랑 덱스 ",
-        "덱스와 클로 ",
-        "클로와 덱스 ",
-        "덱스 클로 ",
-        "클로 덱스 ",
-    )
+    ]
+    for codex_name in CODEX_ALIASES:
+        for claude_name in CLAUDE_ALIASES:
+            prefixes.extend(
+                [
+                    f"{codex_name}랑 {claude_name} ",
+                    f"{claude_name}랑 {codex_name} ",
+                    f"{codex_name}와 {claude_name} ",
+                    f"{claude_name}와 {codex_name} ",
+                    f"{codex_name} {claude_name} ",
+                    f"{claude_name} {codex_name} ",
+                ]
+            )
     for prefix in prefixes:
         if lowered.startswith(prefix):
             return True, stripped[len(prefix) :].strip()
     return False, stripped
+
+
+def _prefix_variants(alias: str) -> tuple[str, ...]:
+    return (
+        f"{alias}야",
+        f"{alias}:",
+        f"{alias},",
+        f"{alias} ",
+        f"!{alias}",
+        f"/{alias}",
+    )
+
+
+def agent_prefixes_for(agent: str) -> tuple[str, ...]:
+    aliases = CLAUDE_ALIASES if agent == "claude" else CODEX_ALIASES
+    prefixes: list[str] = []
+    for alias in aliases:
+        prefixes.extend(_prefix_variants(alias))
+    return tuple(dict.fromkeys(prefixes))
+
+
+def agent_prefixes() -> tuple[str, ...]:
+    return agent_prefixes_for("claude") + agent_prefixes_for("codex")
 
 
 def parse_route(text: str) -> tuple[str, str, bool]:
@@ -591,8 +600,8 @@ def parse_route(text: str) -> tuple[str, str, bool]:
     project_access, stripped, context = consume_context_prefix(stripped)
     lowered = stripped.lower()
     routes = [
-        ("claude", ("클로야", "클로:", "클로,", "클로 ", "!클로", "/클로", "클로드야", "클로드:", "클로드,", "클로드 ", "!claude", "/claude", "claude:")),
-        ("codex", ("덱스야", "덱스:", "덱스,", "덱스 ", "!덱스", "/덱스", "코덱스야", "코덱스:", "코덱스,", "코덱스 ", "!codex", "/codex", "codex:")),
+        ("claude", agent_prefixes_for("claude")),
+        ("codex", agent_prefixes_for("codex")),
     ]
     for agent, prefixes in routes:
         for prefix in prefixes:
@@ -607,35 +616,7 @@ def parse_route(text: str) -> tuple[str, str, bool]:
 def has_agent_prefix(text: str) -> bool:
     _, stripped, _ = consume_context_prefix(text)
     lowered = stripped.strip().lower()
-    prefixes = (
-        "클로야",
-        "클로:",
-        "클로,",
-        "클로 ",
-        "!클로",
-        "/클로",
-        "클로드야",
-        "클로드:",
-        "클로드,",
-        "클로드 ",
-        "!claude",
-        "/claude",
-        "claude:",
-        "덱스야",
-        "덱스:",
-        "덱스,",
-        "덱스 ",
-        "!덱스",
-        "/덱스",
-        "코덱스야",
-        "코덱스:",
-        "코덱스,",
-        "코덱스 ",
-        "!codex",
-        "/codex",
-        "codex:",
-    )
-    return lowered.startswith(prefixes)
+    return lowered.startswith(tuple(prefix.lower() for prefix in agent_prefixes()))
 
 
 def parse_routes(text: str) -> list[tuple[str, str, bool]]:
@@ -662,14 +643,8 @@ def parse_routes(text: str) -> list[tuple[str, str, bool]]:
 
 def normalize_agent_name(value: str) -> str:
     normalized = value.strip().lower()
-    aliases = {
-        "클로": "claude",
-        "클로드": "claude",
-        "claude": "claude",
-        "덱스": "codex",
-        "코덱스": "codex",
-        "codex": "codex",
-    }
+    aliases = {alias.lower(): "claude" for alias in CLAUDE_ALIASES}
+    aliases.update({alias.lower(): "codex" for alias in CODEX_ALIASES})
     return aliases.get(normalized, normalized)
 
 
@@ -677,21 +652,21 @@ def help_text() -> str:
     return "\n".join(
         [
             "*사용법*",
-            "`클로 할 일` - 클로로 실행",
-            "`덱스 할 일` - 덱스로 실행",
-            "`둘 다 할 일` - 덱스와 클로 둘 다 실행",
+            "`클로드 할 일` - Claude Code로 실행",
+            "`코덱스 할 일` - Codex로 실행",
+            "`둘 다 할 일` - Claude Code와 Codex 둘 다 실행",
             "`slack agent router app으로 뭐 할 수 있어?` - 이 로컬 라우터의 기능 확인",
-            "`덱스 카카오 나에게 보내기 할 일 정리해줘` - KMS 카카오 입력에서 할 일 확인",
+            "`코덱스 카카오 나에게 보내기 할 일 정리해줘` - local workspace의 카카오 입력에서 할 일 확인",
             "`토론 주제` - Steelman/Double Crux/변증법을 합친 확장 티키타카 토론",
             "`계속` / `다음` / `진행해봐` - 직전 토론의 다음 라운드 진행",
             "`짧게 보고서 형태로 정리해줘` - 활성 토론을 보고서형으로만 요약",
-            "`클로야 할 일` / `덱스야 할 일`도 가능",
-            "`업무 ...` - KMS workspace 기준의 깊은 작업",
-            "`업무 할일 ...` - KMS task 원장에 할 일 추가 후 Today Brief 갱신",
+            "`클로`, `덱스` 같은 짧은 호출명은 env에서 별칭으로 바꿀 수 있습니다.",
+            "`업무 ...` - local workspace 기준의 깊은 작업",
+            "`업무 할일 ...` - local workspace task 원장에 할 일 추가",
             "`작업 ...` - 인박스/가벼운 작업 폴더 기준",
             "`자료 ...` / `프로젝트 ...` - 전체 프로젝트 폴더를 읽기용으로 호출",
-            "`리셋 클로` - 클로 세션 초기화",
-            "`리셋 덱스` - 덱스 세션 초기화",
+            "`리셋 클로드` - Claude Code 세션 초기화",
+            "`리셋 코덱스` - Codex 세션 초기화",
             "`리셋 토론` - Debate Mode 상태 초기화",
             f"기본 라우팅: `{AGENT_DISPLAY.get(DEFAULT_AGENT, DEFAULT_AGENT)}`",
         ]
@@ -729,13 +704,13 @@ def _split_task_text(text: str) -> tuple[str, str]:
     return title, body
 
 
-def create_manager_task(task_text: str) -> tuple[Path, str]:
+def create_workspace_task(task_text: str) -> tuple[Path, str]:
     title, body = _split_task_text(task_text)
     now_iso = _local_iso_timestamp()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     task_id = f"task-slack-{stamp}"
-    KMS_TASKS_DIR.mkdir(parents=True, exist_ok=True)
-    path = KMS_TASKS_DIR / f"{task_id}.md"
+    WORKSPACE_TASKS_DIR.mkdir(parents=True, exist_ok=True)
+    path = WORKSPACE_TASKS_DIR / f"{task_id}.md"
     body_block = body or "Slack에서 추가한 업무 할 일입니다."
     content = f"""---
 id: {task_id}
@@ -745,7 +720,7 @@ priority: medium
 tags:
   - slack
   - capture
-owner: kongdon
+owner: local-user
 source: slack
 updated_at: {now_iso}
 ---
@@ -759,16 +734,12 @@ updated_at: {now_iso}
 - Slack에서 업무 할 일로 추가됨.
 """
     path.write_text(content, encoding="utf-8")
-    LEGACY_TASKS_DIR.mkdir(parents=True, exist_ok=True)
-    legacy_path = LEGACY_TASKS_DIR / f"{task_id}.md"
-    legacy_path.write_text(content + f"\n<!-- KMS primary: {path} -->\n", encoding="utf-8")
     return path, title
 
 
-def refresh_manager_today_brief(timeout: int = 180) -> tuple[bool, str]:
-    launcher = MANAGER_ROOT / "kk.ps1"
-    if not launcher.exists():
-        return False, f"kk.ps1 not found: {launcher}"
+def refresh_workspace_shared_context(timeout: int = 90) -> tuple[bool, str]:
+    if not WORKSPACE_SLACK_SYNC.exists():
+        return False, f"sync-slack-outbox.ps1 not found: {WORKSPACE_SLACK_SYNC}"
     try:
         result = subprocess.run(
             [
@@ -777,43 +748,14 @@ def refresh_manager_today_brief(timeout: int = 180) -> tuple[bool, str]:
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                str(launcher),
-                "today",
-            ],
-            capture_output=True,
-            text=True,
-            cwd=str(MANAGER_ROOT),
-            env=agent_environment(),
-            timeout=timeout,
-            encoding="utf-8",
-            errors="replace",
-        )
-    except subprocess.TimeoutExpired:
-        return False, f"Today brief refresh timed out after {timeout} seconds."
-    if result.returncode != 0:
-        return False, (result.stderr or result.stdout or "unknown error").strip()
-    return True, (result.stdout or "").strip()
-
-
-def refresh_manager_shared_context(timeout: int = 90) -> tuple[bool, str]:
-    if not MANAGER_SLACK_SYNC.exists():
-        return False, f"sync-slack-outbox.ps1 not found: {MANAGER_SLACK_SYNC}"
-    try:
-        result = subprocess.run(
-            [
-                POWERSHELL_EXE,
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(MANAGER_SLACK_SYNC),
+                str(WORKSPACE_SLACK_SYNC),
                 "-Root",
-                str(MANAGER_ROOT),
+                str(WORKSPACE_ROOT),
                 "-Quiet",
             ],
             capture_output=True,
             text=True,
-            cwd=str(MANAGER_ROOT),
+            cwd=str(WORKSPACE_ROOT),
             env=agent_environment(),
             timeout=timeout,
             encoding="utf-8",
@@ -826,7 +768,7 @@ def refresh_manager_shared_context(timeout: int = 90) -> tuple[bool, str]:
     return True, (result.stdout or "").strip()
 
 
-def should_use_manager_shared_context(prompt: str, context: dict[str, object] | None) -> bool:
+def should_use_workspace_shared_context(prompt: str, context: dict[str, object] | None) -> bool:
     if context and context.get("label") == "업무":
         return True
     if "호출 컨텍스트: 업무" in prompt:
@@ -877,32 +819,33 @@ def router_capability_text() -> str:
         [
             "*Slack Agent Router App에서 할 수 있는 일*",
             "",
-            "이 앱은 Slack을 KMS의 조종석처럼 쓰게 해주는 로컬 라우터입니다. 일반 Slack 검색 봇이 아니라, Slack 메시지를 읽고 현재 의도를 분류해서 덱스/클로, KMS, 카카오/SMS/폴더 입력, 작업 생성으로 보내는 역할입니다.",
+            "이 앱은 Slack을 조종석으로 쓰고, 로컬 workspace에 필요한 결과를 정리해 주는 라우터입니다. 공식 에이전트 이름은 Claude Code와 Codex이며, `클로`/`덱스` 같은 호출명은 사용자가 정한 별칭으로 바꿀 수 있습니다.",
             "",
             "1. *에이전트 실행*",
-            "- `덱스 ...`: Codex로 실행",
-            "- `클로 ...`: Claude Code로 실행",
-            "- `둘 다 ...`: 덱스와 클로 둘 다 실행",
+            "- `코덱스 ...`: Codex로 실행",
+            "- `클로드 ...`: Claude Code로 실행",
+            "- `둘 다 ...`: Claude Code와 Codex 둘 다 실행",
+            "- `CODEX_ALIASES`, `CLAUDE_ALIASES`로 호출명을 바꿀 수 있음",
             "",
-            "2. *KMS 운영 명령*",
+            "2. *Local workspace 운영 명령*",
             "- `업무 오늘 할 일 정리해줘`",
             "- `업무 할일 새 콘텐츠 초안 만들기`",
             "- `작업 inbox 확인해줘`",
             "",
             "3. *입력 채널 참조*",
-            "- `덱스 카카오 나에게 보내기 할 일 정리해줘`",
+            "- `코덱스 카카오 나에게 보내기 할 일 정리해줘`",
             "- `문자에서 들어온 문의만 정리해줘`",
             "- `폴더 인박스 처리해줘`",
             "",
             "4. *토론 모드*",
-            "- `둘이 토론해`로 덱스와 클로가 구조/실행 관점과 브랜드/독자 관점으로 토론합니다.",
+            "- `둘이 토론해`로 Codex와 Claude가 구조/실행 관점과 브랜드/독자 관점으로 토론합니다.",
             "- `다음`, `계속`, `진행해봐`는 활성 토론이 있을 때만 이어갑니다.",
             "",
             "5. *중요한 경계*",
-            "- Slack은 기본적으로 조종석입니다. 일반 대화는 자동으로 KMS에 저장하지 않습니다.",
+            "- Slack은 기본적으로 조종석입니다. 일반 대화는 자동으로 local workspace에 저장하지 않습니다.",
             "- 저장하려면 `저장`, `캡처`, `아카이브`, `등록`처럼 명시해야 합니다.",
-            f"- KMS 기준 폴더: `{KMS_ROOT}`",
-            f"- KMS task 폴더: `{KMS_TASKS_DIR}`",
+            f"- Local workspace 기준 폴더: `{LOCAL_WORKSPACE_ROOT}`",
+            f"- Task 폴더: `{WORKSPACE_TASKS_DIR}`",
         ]
     )
 
@@ -913,7 +856,7 @@ def _has_any(text: str, terms: tuple[str, ...]) -> bool:
     return any(term.lower() in lowered or _normalize_short_text(term) in normalized for term in terms)
 
 
-def is_explicit_kms_action_request(text: str) -> bool:
+def is_explicit_workspace_action_request(text: str) -> bool:
     stripped = _strip_optional_agent_prefix(text)
     if is_explicit_debate_request(stripped):
         return False
@@ -930,7 +873,8 @@ def is_explicit_kms_action_request(text: str) -> bool:
         "sms",
         "알림",
         "notification",
-        "kms",
+        "workspace",
+        "local workspace",
         "슬랙 저장",
         "slack 저장",
         "inbox",
@@ -980,7 +924,7 @@ def is_context_repair_request(text: str) -> bool:
     }
 
 
-def apply_kms_action_note(prompt: str, channel: str) -> str:
+def apply_workspace_action_note(prompt: str, channel: str) -> str:
     recent = load_recent_context(channel)
     recent_block = ""
     if recent:
@@ -991,13 +935,13 @@ def apply_kms_action_note(prompt: str, channel: str) -> str:
         )
     return (
         f"{prompt.strip()}\n\n"
-        "KMS 라우팅 지침:\n"
+        "Local workspace 라우팅 지침:\n"
         "- 이 요청은 현재 사용자 명령을 우선합니다. 이전 Debate Mode 주제를 이어가지 마세요.\n"
-        "- Slack은 조종석이고 KMS가 운영체제입니다. 필요한 경우 KMS 로컬 파일을 읽어 근거로 답하세요.\n"
-        f"- KMS root: {KMS_ROOT}\n"
-        f"- Kakao inputs: {KMS_KAKAO_INPUTS_DIR}\n"
-        f"- Kakao ledger: {KMS_KAKAO_LEDGER_DIR}\n"
-        f"- KMS tasks: {KMS_TASKS_DIR}\n"
+        "- Slack은 조종석이고 local workspace가 운영 폴더입니다. 필요한 경우 local workspace 파일을 읽어 근거로 답하세요.\n"
+        f"- Local workspace root: {LOCAL_WORKSPACE_ROOT}\n"
+        f"- Kakao inputs: {WORKSPACE_KAKAO_INPUTS_DIR}\n"
+        f"- Kakao ledger: {WORKSPACE_KAKAO_LEDGER_DIR}\n"
+        f"- Tasks: {WORKSPACE_TASKS_DIR}\n"
         "- 카카오/문자/폴더에서 실제 수집된 데이터가 없으면 없다고 말하고, 지어내지 마세요.\n"
         "- 할 일 정리 요청이면 실행 가능한 TASK 후보와 출처를 짧게 나누어 답하세요."
         f"{recent_block}"
@@ -1012,12 +956,12 @@ def classify_router_intent(text: str, channel: str = SLACK_CHANNEL) -> dict[str,
         return {"intent": "reset", "clear_debate": False}
     if is_router_capability_question(text):
         return {"intent": "capability", "clear_debate": True}
-    if parse_manager_task_command(text):
-        return {"intent": "manager_task", "clear_debate": True}
+    if parse_workspace_task_command(text):
+        return {"intent": "workspace_task", "clear_debate": True}
     if is_file_mode_request(text):
         return {"intent": "file_mode", "clear_debate": True}
-    if is_explicit_kms_action_request(text):
-        return {"intent": "kms_action", "clear_debate": True}
+    if is_explicit_workspace_action_request(text):
+        return {"intent": "workspace_action", "clear_debate": True}
     if is_context_repair_request(text):
         return {"intent": "repair_or_clarify", "clear_debate": False}
     debate_intent = classify_debate_intent(text, channel)
@@ -1072,7 +1016,7 @@ def is_debate_report_style_request(text: str) -> bool:
 
 
 def is_active_debate_report_request(text: str) -> bool:
-    if is_file_mode_request(text) or is_explicit_kms_action_request(text):
+    if is_file_mode_request(text) or is_explicit_workspace_action_request(text):
         return False
     normalized = _normalize_short_text(text)
     lowered = text.lower()
@@ -1097,6 +1041,9 @@ def is_explicit_debate_request(text: str) -> bool:
         "토론",
         "둘이 토론",
         "둘 다 토론",
+        "코덱스와 클로드",
+        "코덱스랑 클로드",
+        "클로드랑 코덱스",
         "덱스와 클로",
         "덱스랑 클로",
         "클로랑 덱스",
@@ -1169,7 +1116,7 @@ def infer_topic_from_recent(raw_text: str, channel: str, debate_state: dict[str,
 
 
 def classify_debate_intent(text: str, channel: str) -> dict[str, object] | None:
-    if is_file_mode_request(text) or is_explicit_kms_action_request(text) or is_router_capability_question(text):
+    if is_file_mode_request(text) or is_explicit_workspace_action_request(text) or is_router_capability_question(text):
         return None
 
     project_access, _, context = consume_context_prefix(text)
@@ -1240,12 +1187,12 @@ def _debate_context_block(
             ]
         )
     if context and context.get("label") == "업무":
-        shared_ok, shared_detail = refresh_manager_shared_context()
+        shared_ok, shared_detail = refresh_workspace_shared_context()
         if not shared_ok:
             log(f"shared context refresh failed before debate: {shared_detail[-500:]}")
         lines.extend(
             [
-                f"KMS 공유 기준 파일: {MANAGER_SHARED_CONTEXT}",
+                f"Local workspace 공유 기준 파일: {WORKSPACE_SHARED_CONTEXT}",
                 "가능하면 위 파일을 먼저 읽고, 현재 할 일/참고 일정과 충돌하지 않는 결론을 내세요.",
             ]
         )
@@ -1298,11 +1245,11 @@ def _debate_output_protocol(output_style: str) -> str:
 ## 요약 판단
 {핵심 결론을 2~3문장으로 정리}
 
-## 덱스
+## 코덱스
 - {구조/실행 관점 핵심 판단}
 - {측정 가능성 또는 반복 가능성 관점 보강점}
 
-## 클로
+## 클로드
 - {브랜드/독자 경험 관점 핵심 판단}
 - {문체, 감정선, 기억성 관점 보강점}
 
@@ -1322,7 +1269,7 @@ def _debate_output_protocol(output_style: str) -> str:
 {다음에 다룰 주제 한 문장}"""
 
     return """기본 출력은 보고서형 분석이 아니라 다중 라운드 티키타카형 토론입니다.
-덱스와 클로가 서로의 말을 받아 Steelman, Double Crux, Principled Negotiation, Slow Dialogue, Dialectic Synthesis를 한 번에 적용하고, 마지막에 최고의 통합 답변을 도출하세요.
+코덱스와 클로드가 서로의 말을 받아 Steelman, Double Crux, Principled Negotiation, Slow Dialogue, Dialectic Synthesis를 한 번에 적용하고, 마지막에 최고의 통합 답변을 도출하세요.
 처음부터 결론을 정리하지 말고, 충분히 부딪히고 기준을 좁힌 뒤 마지막에만 합의안과 최종 답변을 제시하세요.
 
 적용할 토론법:
@@ -1330,7 +1277,7 @@ def _debate_output_protocol(output_style: str) -> str:
 - Double Crux: 두 사람의 결론을 바꿀 핵심 갈림 조건을 찾는다.
 - Principled Negotiation: 입장이 아니라 이해관계, 선택지, 객관 기준으로 판단한다.
 - Slow Dialogue: 중간에 속도를 늦추고 독자 감정, 브랜드 인식, 맥락 손상을 점검한다.
-- Dialectic Synthesis: 덱스의 작동성 thesis와 클로의 인간미 antithesis를 넘어 제3안을 만든다.
+- Dialectic Synthesis: 코덱스의 작동성 thesis와 클로드의 인간미 antithesis를 넘어 제3안을 만든다.
 
 출력 형식:
 ## 토론 안건
@@ -1345,34 +1292,34 @@ def _debate_output_protocol(output_style: str) -> str:
 
 ## 티키타카 토론
 
-**덱스:**  
+**코덱스:**  
 {1턴. 구조/실행 관점의 첫 주장. 2~4문장}
 
-**클로:**  
-{2턴. 덱스 주장을 Steelman으로 요약한 뒤 브랜드/독자 관점에서 반박. 2~4문장}
+**클로드:**  
+{2턴. 코덱스 주장을 Steelman으로 요약한 뒤 브랜드/독자 관점에서 반박. 2~4문장}
 
-**덱스:**  
-{3턴. 클로 주장을 Steelman으로 요약한 뒤 일부 수용 또는 재반박. 2~4문장}
+**코덱스:**  
+{3턴. 클로드 주장을 Steelman으로 요약한 뒤 일부 수용 또는 재반박. 2~4문장}
 
-**클로:**  
-{4턴. Double Crux 후보를 제시한다. 무엇이 확인되면 클로의 판단이 바뀌는지 말한다. 2~4문장}
+**클로드:**  
+{4턴. Double Crux 후보를 제시한다. 무엇이 확인되면 클로드의 판단이 바뀌는지 말한다. 2~4문장}
 
-**덱스:**  
-{5턴. 덱스의 Double Crux 후보를 제시하고, 측정 가능한 객관 기준을 제안한다. 2~4문장}
+**코덱스:**  
+{5턴. 코덱스의 Double Crux 후보를 제시하고, 측정 가능한 객관 기준을 제안한다. 2~4문장}
 
-**클로:**  
+**클로드:**  
 {6턴. Slow Dialogue로 속도를 늦추고 독자 감정, 말투, 기억성을 점검한다. 2~4문장}
 
-**덱스:**  
+**코덱스:**  
 {7턴. Principled Negotiation 방식으로 입장 대신 이해관계와 선택지를 재구성한다. 2~4문장}
 
-**클로:**  
+**클로드:**  
 {8턴. 선택지 중 브랜드 온도를 해치지 않는 조건을 붙인다. 2~4문장}
 
-**덱스:**  
+**코덱스:**  
 {9턴. Dialectic Synthesis로 실행 가능한 제3안을 제시한다. 2~4문장}
 
-**클로:**  
+**클로드:**  
 {10턴. 제3안이 사람에게 어떻게 기억될지 최종 보완한다. 2~4문장}
 
 ## 충돌 지점
@@ -1392,8 +1339,8 @@ def _debate_output_protocol(output_style: str) -> str:
 {다음에 다룰 주제 한 문장}
 
 금지:
-- `덱스 의견`, `클로 의견`, `현재 토론 안건 확인`, `서로의 반박` 같은 보고서형 목차로 쓰지 마세요.
-- 덱스와 클로의 발언을 병렬 요약으로 나열하지 마세요.
+- `코덱스 의견`, `클로드 의견`, `현재 토론 안건 확인`, `서로의 반박` 같은 보고서형 목차로 쓰지 마세요.
+- 코덱스와 클로드의 발언을 병렬 요약으로 나열하지 마세요.
 - 합의안을 티키타카 토론보다 먼저 제시하지 마세요."""
 
 
@@ -1445,7 +1392,7 @@ def split_debate_reply(reply: str) -> list[str]:
         line = raw.rstrip()
         heading = line.strip().lstrip("#").strip()
         is_heading = line.strip().startswith("## ")
-        is_speaker = line.strip().startswith("**덱스:**") or line.strip().startswith("**클로:**")
+        is_speaker = line.strip().startswith(("**코덱스:**", "**클로드:**", "**덱스:**", "**클로:**"))
 
         if is_heading:
             if heading == "티키타카 토론":
@@ -1513,7 +1460,7 @@ def handle_debate_message(event: dict) -> bool:
     except Exception as exc:
         log(f"reaction add failed: {exc}")
 
-    codex_prompt = f"""KMS Debate Mode입니다.
+    codex_prompt = f"""Debate Mode입니다.
 
 현재 토론 안건:
 {topic}
@@ -1522,7 +1469,7 @@ def handle_debate_message(event: dict) -> bool:
 
 {context_block}
 
-역할: 덱스
+역할: 코덱스
 - 구조, 실행 가능성, 시스템 설계, 확장성, 검증 가능성을 본다.
 - 말투는 직설적이고 실행 중심이다.
 - 애매한 표현을 싫어하고 "측정 가능한가?", "반복 가능한가?", "전환 구조가 있는가?"를 따진다.
@@ -1530,13 +1477,13 @@ def handle_debate_message(event: dict) -> bool:
 - 기준표/전략/산출물이 실제 운영으로 이어지는지 검토한다.
 
 출력:
-덱스의 첫 주장과 클로가 반박할 만한 논점을 3~6문장으로 쓰세요.
+코덱스의 첫 주장과 클로드가 반박할 만한 논점을 3~6문장으로 쓰세요.
 Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵심 갈림 조건도 1개 포함하세요.
 최종 Slack 출력은 별도 합성 단계에서 티키타카 대화로 만들 예정이므로 보고서 목차를 쓰지 마세요."""
 
     try:
         codex_reply = call_codex(codex_prompt, channel, project_access=project_access)
-        claude_prompt = f"""KMS Debate Mode입니다.
+        claude_prompt = f"""Debate Mode입니다.
 
 현재 토론 안건:
 {topic}
@@ -1545,11 +1492,11 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
 
 {context_block}
 
-<dex-opening>
+<codex-opening>
 {codex_reply}
-</dex-opening>
+</codex-opening>
 
-역할: 클로
+역할: 클로드
 - 브랜드 인식, 문체, 감정선, 인간미, 독자 경험을 본다.
 - 말투는 섬세하고 독자 감각 중심이다.
 - "이 사람답게 느껴지는가?", "독자가 어떤 감정을 느끼는가?", "기억되는 문장이 있는가?"를 따진다.
@@ -1558,11 +1505,11 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
 - 기준표/전략/산출물이 사람에게 어떻게 보이는지 검토한다.
 
 출력:
-덱스의 말을 짧게 요약하거나 인용한 뒤, 클로 관점의 반박/보완을 3~6문장으로 쓰세요.
-덱스 주장의 가장 좋은 버전을 먼저 인정한 뒤, 독자 감정과 브랜드 기억 관점에서 Double Crux 후보를 1개 제시하세요.
+코덱스의 말을 짧게 요약하거나 인용한 뒤, 클로드 관점의 반박/보완을 3~6문장으로 쓰세요.
+코덱스 주장의 가장 좋은 버전을 먼저 인정한 뒤, 독자 감정과 브랜드 기억 관점에서 Double Crux 후보를 1개 제시하세요.
 최종 Slack 출력은 별도 합성 단계에서 티키타카 대화로 만들 예정이므로 보고서 목차를 쓰지 마세요."""
         claude_reply = call_claude(claude_prompt, channel, project_access=project_access)
-        codex_rebuttal_prompt = f"""KMS Debate Mode 추가 라운드입니다.
+        codex_rebuttal_prompt = f"""Debate Mode 추가 라운드입니다.
 
 현재 토론 안건:
 {topic}
@@ -1571,24 +1518,24 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
 
 {context_block}
 
-<dex-opening>
+<codex-opening>
 {codex_reply}
-</dex-opening>
+</codex-opening>
 
-<clo-opening>
+<claude-opening>
 {claude_reply}
-</clo-opening>
+</claude-opening>
 
-역할: 덱스
-- 클로의 브랜드/독자 경험 주장을 Steelman으로 먼저 요약한다.
-- 그다음 Double Crux를 좁힌다. 무엇이 확인되면 덱스의 판단이 바뀌는가?
+역할: 코덱스
+- 클로드의 브랜드/독자 경험 주장을 Steelman으로 먼저 요약한다.
+- 그다음 Double Crux를 좁힌다. 무엇이 확인되면 코덱스의 판단이 바뀌는가?
 - Principled Negotiation 방식으로 이해관계, 선택지, 객관 기준을 제안한다.
 
 출력:
-덱스의 재반박 또는 수정안을 4~7문장으로 쓰세요.
-보고서 목차를 쓰지 말고, 클로의 말을 직접 받아서 반응하세요."""
+코덱스의 재반박 또는 수정안을 4~7문장으로 쓰세요.
+보고서 목차를 쓰지 말고, 클로드의 말을 직접 받아서 반응하세요."""
         codex_rebuttal = call_codex(codex_rebuttal_prompt, channel, project_access=project_access)
-        claude_refinement_prompt = f"""KMS Debate Mode 추가 라운드입니다.
+        claude_refinement_prompt = f"""Debate Mode 추가 라운드입니다.
 
 현재 토론 안건:
 {topic}
@@ -1597,28 +1544,28 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
 
 {context_block}
 
-<dex-opening>
+<codex-opening>
 {codex_reply}
-</dex-opening>
+</codex-opening>
 
-<clo-opening>
+<claude-opening>
 {claude_reply}
-</clo-opening>
+</claude-opening>
 
-<dex-rebuttal>
+<codex-rebuttal>
 {codex_rebuttal}
-</dex-rebuttal>
+</codex-rebuttal>
 
-역할: 클로
-- 덱스의 수정안을 Steelman으로 먼저 요약한다.
+역할: 클로드
+- 코덱스의 수정안을 Steelman으로 먼저 요약한다.
 - Slow Dialogue 방식으로 속도를 늦추고, 독자 감정/문체/기억성 손상을 점검한다.
 - Dialectic Synthesis를 위해 브랜드 온도를 해치지 않는 조건을 붙인다.
 
 출력:
-클로의 재보완 또는 수정안을 4~7문장으로 쓰세요.
-보고서 목차를 쓰지 말고, 덱스의 말을 직접 받아서 반응하세요."""
+클로드의 재보완 또는 수정안을 4~7문장으로 쓰세요.
+보고서 목차를 쓰지 말고, 코덱스의 말을 직접 받아서 반응하세요."""
         claude_refinement = call_claude(claude_refinement_prompt, channel, project_access=project_access)
-        judge_prompt = f"""KMS Debate Mode 최종 출력 작성입니다.
+        judge_prompt = f"""Debate Mode 최종 출력 작성입니다.
 
 현재 토론 안건:
 {topic}
@@ -1627,21 +1574,21 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
 
 {context_block}
 
-<dex-raw-position>
+<codex-raw-position>
 {codex_reply}
-</dex-raw-position>
+</codex-raw-position>
 
-<clo-raw-position>
+<claude-raw-position>
 {claude_reply}
-</clo-raw-position>
+</claude-raw-position>
 
-<dex-rebuttal>
+<codex-rebuttal>
 {codex_rebuttal}
-</dex-rebuttal>
+</codex-rebuttal>
 
-<clo-refinement>
+<claude-refinement>
 {claude_refinement}
-</clo-refinement>
+</claude-refinement>
 
 출력 스타일: {output_style}
 
@@ -1650,8 +1597,8 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
 주의:
 - inbox, outbox, routing-rules, 폴더 처리 이야기를 꺼내지 마세요.
 - 실제 안건과 직전 산출물을 기준으로 토론하세요.
-- 덱스와 클로가 서로의 말을 받아서 반응하게 만드세요.
-- 대화형 출력에서는 덱스와 클로가 각각 최소 5번 이상 발언해야 합니다.
+- 코덱스와 클로드가 서로의 말을 받아서 반응하게 만드세요.
+- 대화형 출력에서는 코덱스와 클로드가 각각 최소 5번 이상 발언해야 합니다.
 - 각 발언은 2~4문장으로 제한하세요.
 - Steelman, Double Crux, Principled Negotiation, Slow Dialogue, Dialectic Synthesis가 모두 눈에 보이게 반영되어야 합니다.
 - 마지막에는 `최고의 답변` 섹션으로 현재 안건의 최종 통합 답변을 제시하세요.
@@ -1671,14 +1618,14 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
                 "context_label": context.get("label") if context else "",
                 "context_path": str(context.get("path")) if context else "",
                 "last_user_text": text,
-                "last_dex": _clip(f"{codex_reply}\n\n{codex_rebuttal}", 4000),
-                "last_clo": _clip(f"{claude_reply}\n\n{claude_refinement}", 4000),
-                "last_dex_rebuttal": _clip(codex_rebuttal, 3000),
-                "last_clo_refinement": _clip(claude_refinement, 3000),
+                "last_codex": _clip(f"{codex_reply}\n\n{codex_rebuttal}", 4000),
+                "last_claude": _clip(f"{claude_reply}\n\n{claude_refinement}", 4000),
+                "last_codex_rebuttal": _clip(codex_rebuttal, 3000),
+                "last_claude_refinement": _clip(claude_refinement, 3000),
                 "last_summary": _clip(reply, 6000),
                 "next_round_topic": _next_round_topic(topic, reply),
                 "output_style": output_style,
-                "protocol": "KMS Steelman Dialectic Protocol",
+                "protocol": "Agent Router Steelman Dialectic Protocol",
             },
         )
         record_recent_exchange(channel, text, reply, mode="debate", topic=topic)
@@ -1696,9 +1643,9 @@ Steelman, Double Crux, Principled Negotiation 단계에서 다룰 수 있는 핵
     return True
 
 
-def handle_manager_task_message(event: dict) -> bool:
+def handle_workspace_task_message(event: dict) -> bool:
     text = (event.get("text") or "").strip()
-    task_text = parse_manager_task_command(text)
+    task_text = parse_workspace_task_command(text)
     if not task_text:
         return False
 
@@ -1709,32 +1656,16 @@ def handle_manager_task_message(event: dict) -> bool:
     except Exception as exc:
         log(f"reaction add failed: {exc}")
 
-    task_path, title = create_manager_task(task_text)
-    ok, detail = refresh_manager_today_brief()
-    shared_ok, shared_detail = refresh_manager_shared_context()
-    latest_brief = MANAGER_ROOT / "workspace" / "system" / "briefs" / "latest.md"
-    if ok and shared_ok:
-        reply = "\n".join(
-            [
-                "*업무 할 일 추가 완료*",
-                f"- 제목: `{title}`",
-                f"- task: `{task_path}`",
-                f"- latest brief: `{latest_brief}`",
-                f"- shared context: `{MANAGER_SHARED_CONTEXT}`",
-            ]
-        )
-        final_reaction = "white_check_mark"
-    else:
-        log(f"manager refresh failed: today={detail[-500:]} shared={shared_detail[-500:]}")
-        reply = "\n".join(
-            [
-                "*업무 할 일은 추가했지만 후속 갱신 일부가 실패했습니다.*",
-                f"- 제목: `{title}`",
-                f"- task: `{task_path}`",
-                "- 나중에 `업무 오늘 해야 할 일 정리해줘`로 다시 확인해 주세요.",
-            ]
-        )
-        final_reaction = "warning"
+    task_path, title = create_workspace_task(task_text)
+    reply = "\n".join(
+        [
+            "*업무 할 일 추가 완료*",
+            f"- 제목: `{title}`",
+            f"- task: `{task_path}`",
+            f"- workspace: `{LOCAL_WORKSPACE_ROOT}`",
+        ]
+    )
+    final_reaction = "white_check_mark"
     post_message(channel, reply)
     record_recent_exchange(channel, text, reply, mode="task", topic=title)
 
@@ -1743,7 +1674,7 @@ def handle_manager_task_message(event: dict) -> bool:
         web.reactions_add(channel=channel, timestamp=ts, name=final_reaction)
     except Exception as exc:
         log(f"reaction swap failed: {exc}")
-    log(f"manager_task title={title[:80]} path={task_path}")
+    log(f"workspace_task title={title[:80]} path={task_path}")
     return True
 
 
@@ -1759,9 +1690,9 @@ def handle_router_capability_message(event: dict) -> bool:
     return True
 
 
-def handle_kms_action_message(event: dict) -> bool:
+def handle_workspace_action_message(event: dict) -> bool:
     text = (event.get("text") or "").strip()
-    if not is_explicit_kms_action_request(text):
+    if not is_explicit_workspace_action_request(text):
         return False
 
     channel = event.get("channel") or ""
@@ -1773,27 +1704,27 @@ def handle_kms_action_message(event: dict) -> bool:
         log(f"reaction add failed: {exc}")
 
     try:
-        shared_ok, shared_detail = refresh_manager_shared_context()
+        shared_ok, shared_detail = refresh_workspace_shared_context()
         if not shared_ok:
-            log(f"shared context refresh failed before kms action: {shared_detail[-500:]}")
+            log(f"shared context refresh failed before workspace action: {shared_detail[-500:]}")
         routes_to_run = parse_routes(text)
         responses: list[str] = []
         for agent, prompt, _project_access in routes_to_run:
-            kms_prompt = apply_kms_action_note(prompt, channel)
+            workspace_prompt = apply_workspace_action_note(prompt, channel)
             if shared_ok:
-                kms_prompt += f"\n- KMS shared context: {MANAGER_SHARED_CONTEXT}"
+                workspace_prompt += f"\n- Local workspace shared context: {WORKSPACE_SHARED_CONTEXT}"
             if agent == "codex":
-                reply = call_codex(kms_prompt, channel, project_access=True)
+                reply = call_codex(workspace_prompt, channel, project_access=True)
             else:
-                reply = call_claude(kms_prompt, channel, project_access=True)
+                reply = call_claude(workspace_prompt, channel, project_access=True)
             responses.append(f"*{AGENT_DISPLAY.get(agent, agent)}*\n{reply}")
         combined_reply = "\n\n".join(responses)
         post_message(channel, combined_reply)
-        record_recent_exchange(channel, text, combined_reply, mode="kms_action", topic="KMS action")
+        record_recent_exchange(channel, text, combined_reply, mode="workspace_action", topic="local workspace action")
         final_reaction = "white_check_mark"
     except Exception as exc:
-        log(f"kms action handler failed: {exc}")
-        post_message(channel, f"KMS 요청 처리 중 오류가 났습니다: `{type(exc).__name__}`")
+        log(f"workspace action handler failed: {exc}")
+        post_message(channel, f"Local workspace 요청 처리 중 오류가 났습니다: `{type(exc).__name__}`")
         final_reaction = "warning"
 
     try:
@@ -1811,10 +1742,10 @@ def handle_context_repair_message(event: dict) -> bool:
     channel = event.get("channel") or ""
     recent = load_recent_context(channel)
     last_user_text = str(recent.get("last_user_text") or "").strip()
-    if last_user_text and is_explicit_kms_action_request(last_user_text):
+    if last_user_text and is_explicit_workspace_action_request(last_user_text):
         repaired = dict(event)
         repaired["text"] = last_user_text
-        return handle_kms_action_message(repaired)
+        return handle_workspace_action_message(repaired)
 
     clear_debate_state(channel)
     reply = "맞아요. 직전 답변은 이전 토론 문맥에 끌려갔을 가능성이 큽니다. 다시 처리할 대상을 `카카오`, `문자`, `업무`, `작업`, `inbox` 중 하나와 함께 한 문장으로 보내주세요."
@@ -1859,17 +1790,17 @@ def handle_message(event: dict) -> None:
         return
     if lowered in ("클로 리셋", "클로드 리셋", "claude reset"):
         reset_session("claude", channel)
-        post_message(channel, "세션을 초기화했습니다: `클로`")
+        post_message(channel, "세션을 초기화했습니다: `클로드`")
         return
     if lowered in ("덱스 리셋", "코덱스 리셋", "codex reset"):
         delete_session("codex", channel)
-        post_message(channel, "세션을 초기화했습니다: `덱스`")
+        post_message(channel, "세션을 초기화했습니다: `코덱스`")
         return
     if handle_router_capability_message(event):
         return
-    if handle_manager_task_message(event):
+    if handle_workspace_task_message(event):
         return
-    if handle_kms_action_message(event):
+    if handle_workspace_action_message(event):
         return
     if handle_context_repair_message(event):
         return
@@ -1882,15 +1813,15 @@ def handle_message(event: dict) -> None:
     prepared_routes = []
     for agent, prompt, project_access in routes_to_run:
         _, _, context = consume_context_prefix(text)
-        if should_use_manager_shared_context(prompt, context):
-            shared_ok, shared_detail = refresh_manager_shared_context()
+        if should_use_workspace_shared_context(prompt, context):
+            shared_ok, shared_detail = refresh_workspace_shared_context()
             if not shared_ok:
                 log(f"shared context refresh failed: {shared_detail[-500:]}")
             prompt = (
                 f"{prompt}\n\n"
-                f"KMS 공유 기준 파일: {MANAGER_SHARED_CONTEXT}\n"
+                f"Local workspace 공유 기준 파일: {WORKSPACE_SHARED_CONTEXT}\n"
                 "위 파일이 있으면 먼저 읽고, 오늘 할 일/참고 일정/슬랙 outbox 관련 질문은 그 기준으로 답하세요. "
-                "충돌이 있으면 KMS workspace의 task/calendar 상태를 우선하세요."
+                "충돌이 있으면 local workspace의 task/calendar 상태를 우선하세요."
             )
             project_access = True
         prepared_routes.append((agent, prompt, project_access))

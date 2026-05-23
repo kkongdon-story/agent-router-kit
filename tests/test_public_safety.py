@@ -36,6 +36,9 @@ class PublicSafetyTests(unittest.TestCase):
             "\uaf41\ub3c8",
             r"C:\Users\js" + "480",
             "OneDrive" + "\\" + "\ubc14\ud0d5",
+            "K" + chr(77) + "S",
+            "ENABLE_" + "K" + chr(77) + "S",
+            "workspace/" + "k" + chr(109) + "s",
         ]
         hits = []
         for path in iter_text_files():
@@ -67,7 +70,7 @@ class PublicSafetyTests(unittest.TestCase):
             "CODEX_EXE",
             "WORKSPACE_ROOT",
             "PROJECT_ROOT",
-            "ENABLE_KMS",
+            "ENABLE_WORKSPACE",
             "ENABLE_SMS",
             "ENABLE_KAKAO",
         ]

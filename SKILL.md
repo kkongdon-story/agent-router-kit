@@ -4,7 +4,7 @@ Use this skill when helping a user install, verify, or troubleshoot `agent-route
 
 ## Goal
 
-Install a local Slack-based personal agent router that can call Claude Code and Codex from Slack, with optional KMS workspace, SMS input, and Kakao input modules.
+Install a local Slack-based personal agent router that can call Claude Code and Codex from Slack, with optional local workspace, SMS input, and Kakao input modules.
 
 ## Rules
 
@@ -12,7 +12,7 @@ Install a local Slack-based personal agent router that can call Claude Code and 
 - Keep secrets in the local env file only.
 - Run a dry run before mutating the machine.
 - Prefer the bundled install scripts over manual copy steps.
-- Keep KMS/SMS/Kakao optional unless the user explicitly enables them.
+- Keep local workspace, SMS, and Kakao optional unless the user explicitly enables them.
 - Do not enable Notion, Google Drive, or Google Calendar in v1.
 - When the user asks what the app can do, answer about agent-router-kit, not generic Slack connector features.
 
@@ -22,7 +22,7 @@ Install a local Slack-based personal agent router that can call Claude Code and 
 2. Confirm Python 3 is available.
 3. Confirm Claude Code and/or Codex CLI launchers are available.
 4. Run dry-run installer.
-5. Run installer with KMS enabled.
+5. Run installer with local workspace enabled.
 6. Tell the user the env file path.
 7. Guide the user through Slack App setup.
 8. Ask the user to fill local env values.
@@ -34,19 +34,19 @@ Install a local Slack-based personal agent router that can call Claude Code and 
 Dry run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -DryRun -EnableKms
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -DryRun -EnableWorkspace
 ```
 
 Install:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableKms
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableWorkspace
 ```
 
 Start at logon:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableKms -RegisterTask
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableWorkspace -RegisterTask
 ```
 
 Env file:
@@ -66,19 +66,19 @@ Run file:
 Dry run:
 
 ```bash
-bash ./scripts/install-macos.sh --dry-run --enable-kms
+bash ./scripts/install-macos.sh --dry-run --enable-workspace
 ```
 
 Install:
 
 ```bash
-bash ./scripts/install-macos.sh --enable-kms
+bash ./scripts/install-macos.sh --enable-workspace
 ```
 
 Start at login:
 
 ```bash
-bash ./scripts/install-macos.sh --enable-kms --register-launchd
+bash ./scripts/install-macos.sh --enable-workspace --register-launchd
 ```
 
 Env file:
@@ -131,8 +131,8 @@ CODEX_EXE=codex
 Send these in Slack:
 
 ```text
-덱스 안녕
-클로 안녕
+코덱스 안녕
+클로드 안녕
 둘이 토론해
 업무 할일 테스트 작업
 slack agent router app으로 뭐 할 수 있어?
@@ -140,17 +140,18 @@ slack agent router app으로 뭐 할 수 있어?
 
 Expected:
 
-- `덱스` routes to Codex.
-- `클로` routes to Claude.
+- `코덱스` routes to Codex.
+- `클로드` routes to Claude.
+- `덱스` and `클로` are only example aliases. Users can change them with `CODEX_ALIASES` and `CLAUDE_ALIASES`.
 - Debate Mode uses the tiktaka debate protocol.
 - Work/task commands do not get swallowed by stale Debate Mode.
 - Capability questions describe agent-router-kit.
 
 ## Optional Modules
 
-KMS workspace:
+Local workspace:
 
-- `ENABLE_KMS=1`
+- `ENABLE_WORKSPACE=1`
 - Creates local input, processed, and ledger folders.
 
 SMS:

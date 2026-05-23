@@ -1,6 +1,6 @@
 # Module 03. SMS Input
 
-SMS input is optional. It collects card usage, deposits, withdrawals, inquiries, authentication codes, and notification messages into the local KMS workspace.
+SMS input is optional. It collects card usage, deposits, withdrawals, inquiries, authentication codes, and notification messages into the local workspace.
 
 ## Android
 

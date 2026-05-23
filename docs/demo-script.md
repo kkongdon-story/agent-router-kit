@@ -29,26 +29,26 @@ Show:
 Send:
 
 ```text
-덱스 안녕
+코덱스 안녕
 ```
 
 Expected:
 
 ```text
-덱스
+코덱스
 연결 정상입니다.
 ```
 
 Send:
 
 ```text
-클로 안녕
+클로드 안녕
 ```
 
 Expected:
 
 ```text
-클로
+클로드
 연결 정상입니다.
 ```
 
@@ -61,8 +61,8 @@ Send:
 Expected:
 
 - Debate Mode starts.
-- Dex speaks from structure/execution.
-- Chlo speaks from brand/reader experience.
+- Codex speaks from structure/execution.
+- Claude speaks from brand/reader experience.
 - They respond to each other before agreement.
 
 Send:
@@ -73,7 +73,7 @@ Send:
 
 Expected:
 
-- Creates or routes a KMS task.
+- Creates or routes a local workspace task.
 - Does not fall into stale Debate Mode.
 
 Send:
@@ -105,5 +105,5 @@ Collect from intentionally opened Kakao room, then ask Slack to classify recent 
 End with the product promise:
 
 ```text
-Slack is the control surface. Local KMS is the operating folder. Claude and Codex are the workers.
+Slack is the control surface. The local workspace is the operating folder. Claude Code and Codex are the workers.
 ```

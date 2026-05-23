@@ -20,7 +20,7 @@ Ask:
 slack agent router app으로 뭐 할 수 있어?
 ```
 
-Expected answer should describe agent-router-kit features: Claude/Codex routing, KMS workspace, Debate Mode, and optional SMS/Kakao inputs.
+Expected answer should describe agent-router-kit features: Claude/Codex routing, local workspace, Debate Mode, and optional SMS/Kakao inputs.
 
 If it describes Slack search, Slack Canvas, or generic workspace admin features, the router prompt or capability answer path is wrong.
 
@@ -61,7 +61,7 @@ POWERSHELL_EXE=pwsh
 Run the installer with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableKms -RegisterTask
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableWorkspace -RegisterTask
 ```
 
 Then check Task Scheduler for `AgentRouterKit`.
@@ -71,7 +71,7 @@ Then check Task Scheduler for `AgentRouterKit`.
 Run:
 
 ```bash
-bash ./scripts/install-macos.sh --enable-kms --register-launchd
+bash ./scripts/install-macos.sh --enable-workspace --register-launchd
 ```
 
 Then check:

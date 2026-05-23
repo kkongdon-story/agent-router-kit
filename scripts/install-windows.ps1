@@ -4,7 +4,7 @@ param(
     [string]$ProjectRoot = "$env:USERPROFILE\agent-router-projects",
     [string]$PythonExe = "python",
     [switch]$RegisterTask,
-    [switch]$EnableKms,
+    [switch]$EnableWorkspace,
     [switch]$EnableSms,
     [switch]$EnableKakao,
     [switch]$DryRun
@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $RouterSource = Join-Path $RepoRoot "templates\slack-agent-router"
-$KmsSource = Join-Path $RepoRoot "templates\kms"
+$InputSource = Join-Path $RepoRoot "templates\workspace-inputs"
 $RouterHome = Join-Path $InstallRoot "slack-agent-router"
 $SecretsDir = Join-Path $InstallRoot "secrets"
 $EnvFile = Join-Path $SecretsDir "slack-agent-router.env"
@@ -45,32 +45,33 @@ Do-Step "Copy Slack router template" {
 }
 
 if ($EnableSms -or $EnableKakao) {
-    $EnableKms = $true
+    $EnableWorkspace = $true
 }
 
-if ($EnableKms) {
-    Do-Step "Create KMS workspace and copy optional SMS/Kakao scripts" {
-        $kmsDirs = @(
-            "workspace\kms\inputs\slack",
-            "workspace\kms\inputs\sms",
-            "workspace\kms\inputs\kakao",
-            "workspace\kms\inputs\folder",
-            "workspace\kms\processed\tasks",
-            "workspace\kms\processed\memos",
-            "workspace\kms\processed\finance",
-            "workspace\kms\processed\schedules",
-            "workspace\kms\processed\content",
-            "workspace\kms\processed\questions",
-            "workspace\kms\processed\noise",
-            "workspace\kms\ledger\sms",
-            "workspace\kms\ledger\kakao",
-            "workspace\kms\ledger\logs",
+if ($EnableWorkspace) {
+    Do-Step "Create local workspace and copy optional SMS/Kakao scripts" {
+        $workspaceDirs = @(
+            "inputs\slack",
+            "inputs\sms",
+            "inputs\kakao",
+            "inputs\folder",
+            "processed\tasks",
+            "processed\memos",
+            "processed\finance",
+            "processed\schedules",
+            "processed\content",
+            "processed\questions",
+            "processed\noise",
+            "ledger\sms",
+            "ledger\kakao",
+            "ledger\logs",
+            "system\slack",
             "scripts"
         )
-        foreach ($dir in $kmsDirs) {
+        foreach ($dir in $workspaceDirs) {
             New-Item -ItemType Directory -Force -Path (Join-Path $WorkspaceRoot $dir) | Out-Null
         }
-        Copy-Item -Path (Join-Path $KmsSource "*.py") -Destination (Join-Path $WorkspaceRoot "scripts") -Force
+        Copy-Item -Path (Join-Path $InputSource "*.py") -Destination (Join-Path $WorkspaceRoot "scripts") -Force
     }
 }
 
@@ -89,7 +90,7 @@ Do-Step "Create env file if missing" {
         $envContent = $envContent -replace "WORKSPACE_ROOT=.*", "WORKSPACE_ROOT=$WorkspaceRoot"
         $envContent = $envContent -replace "AGENT_WORKDIR=.*", "AGENT_WORKDIR=$WorkspaceRoot"
         $envContent = $envContent -replace "PROJECT_ROOT=.*", "PROJECT_ROOT=$ProjectRoot"
-        $envContent = $envContent -replace "ENABLE_KMS=.*", "ENABLE_KMS=$([int][bool]$EnableKms)"
+        $envContent = $envContent -replace "ENABLE_WORKSPACE=.*", "ENABLE_WORKSPACE=$([int][bool]$EnableWorkspace)"
         $envContent = $envContent -replace "ENABLE_SMS=.*", "ENABLE_SMS=$([int][bool]$EnableSms)"
         $envContent = $envContent -replace "ENABLE_KAKAO=.*", "ENABLE_KAKAO=$([int][bool]$EnableKakao)"
         Set-Content -LiteralPath $EnvFile -Value $envContent -Encoding UTF8
@@ -129,7 +130,7 @@ if ($RegisterTask) {
     RunFile = $RunFile
     WorkspaceRoot = $WorkspaceRoot
     ProjectRoot = $ProjectRoot
-    KmsEnabled = [bool]$EnableKms
+    WorkspaceEnabled = [bool]$EnableWorkspace
     SmsEnabled = [bool]$EnableSms
     KakaoEnabled = [bool]$EnableKakao
     TaskRegistered = [bool]$RegisterTask

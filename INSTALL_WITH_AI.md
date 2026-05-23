@@ -11,12 +11,12 @@
 - 실제 토큰은 로컬 secrets env 파일에만 입력하게 해 주세요.
 - 설치 전 DryRun을 먼저 실행해 주세요.
 - 내 OS가 Windows인지 macOS인지 확인하고 해당 스크립트를 사용해 주세요.
-- 기본 설치는 Slack Router + KMS workspace입니다.
+- 기본 설치는 Slack Router + local workspace입니다.
 - SMS/Kakao는 선택 모듈로, 내가 명시적으로 원할 때만 켜 주세요.
 
 최종 확인:
-- Slack에서 "덱스 안녕" 테스트
-- Slack에서 "클로 안녕" 테스트
+- Slack에서 "코덱스 안녕" 테스트
+- Slack에서 "클로드 안녕" 테스트
 - Slack에서 "둘이 토론해" 테스트
 - "slack agent router app으로 뭐 할 수 있어?" 질문이 generic Slack 기능이 아니라 agent-router-kit 기능으로 답하는지 확인
 ```
@@ -45,13 +45,13 @@ AI에게 토큰 값을 보내지 마세요.
 Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableKms
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -EnableWorkspace
 ```
 
 macOS:
 
 ```bash
-bash ./scripts/install-macos.sh --enable-kms
+bash ./scripts/install-macos.sh --enable-workspace
 ```
 
 자동 시작까지 원하면 Windows는 `-RegisterTask`, macOS는 `--register-launchd`를 추가합니다.

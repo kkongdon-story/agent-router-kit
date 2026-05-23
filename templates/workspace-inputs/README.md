@@ -1,4 +1,4 @@
-# KMS Optional Templates
+# Workspace Input Templates
 
 These scripts are optional local input helpers.
 
@@ -6,12 +6,12 @@ These scripts are optional local input helpers.
 - `sms_ingest.py`: SMS event classification helper
 - `kakao_self_ingest.py`: Kakao self-room or selected-room ingestion helper
 
-They are copied into the workspace when KMS/SMS/Kakao options are enabled.
+They are copied into the workspace when local workspace, SMS, or Kakao options are enabled.
 
 Default local storage should stay under:
 
 ```text
-workspace/kms/
+agent-router-workspace/
 ```
 
 Do not commit raw SMS or Kakao ledgers.

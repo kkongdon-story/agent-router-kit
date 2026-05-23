@@ -14,16 +14,16 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_SYSTEM_DIR = Path("workspace") / "system" / "kakao"
-KMS_DIR = Path("workspace") / "kms"
-KMS_INPUTS_DIR = KMS_DIR / "inputs"
-KAKAO_INPUT_DIR = KMS_INPUTS_DIR / "kakao"
-KMS_PROCESSED_DIR = KMS_DIR / "processed"
-TASKS_DIR = KMS_PROCESSED_DIR / "tasks"
-MEMOS_DIR = KMS_PROCESSED_DIR / "memos"
-HOLD_DIR = KMS_PROCESSED_DIR / "hold"
-KMS_LEDGER_DIR = KMS_DIR / "ledger"
-SYSTEM_DIR = KMS_LEDGER_DIR / "kakao"
-LOGS_DIR = KMS_LEDGER_DIR / "logs"
+WORKSPACE_DIR = Path(".")
+WORKSPACE_INPUTS_DIR = WORKSPACE_DIR / "inputs"
+KAKAO_INPUT_DIR = WORKSPACE_INPUTS_DIR / "kakao"
+WORKSPACE_PROCESSED_DIR = WORKSPACE_DIR / "processed"
+TASKS_DIR = WORKSPACE_PROCESSED_DIR / "tasks"
+MEMOS_DIR = WORKSPACE_PROCESSED_DIR / "memos"
+HOLD_DIR = WORKSPACE_PROCESSED_DIR / "hold"
+WORKSPACE_LEDGER_DIR = WORKSPACE_DIR / "ledger"
+SYSTEM_DIR = WORKSPACE_LEDGER_DIR / "kakao"
+LOGS_DIR = WORKSPACE_LEDGER_DIR / "logs"
 STATE_NAME = "kakao-self-ingest-state.json"
 EVENTS_DB_NAME = "kakao-self-events.sqlite"
 EVENTS_JSONL_NAME = "kakao-self-events.jsonl"
@@ -234,7 +234,7 @@ def input_markdown(event: dict[str, Any]) -> tuple[str, str]:
     input_id = f"input-{prefix}-{stamp}-{event['id'][-6:]}"
     content = f"""---
 id: {input_id}
-kms_layer: input
+workspace_layer: input
 source_channel: kakao
 source_chat_id: {event['chat_id']}
 source_room_title: {event.get('room_title', '')}
@@ -252,7 +252,7 @@ created_at: {now_iso()}
 
 {event['redacted_text']}
 
-## KMS 판정 초안
+## Local workspace 판정 초안
 
 - 분류 후보: {event['label']}
 - confidence: {event['confidence']}
@@ -270,11 +270,11 @@ def task_markdown(event: dict[str, Any]) -> tuple[str, str]:
     title = f"{label}: {event['redacted_text'][:42]}"
     content = f"""---
 id: {task_id}
-kms_layer: processed
-kms_type: task
+workspace_layer: processed
+workspace_type: task
 status: open
 priority: medium
-origin: kms
+origin: local-workspace
 source_channel: kakao
 source_chat_id: {event['chat_id']}
 source_input_path: {event.get('input_path', '')}
@@ -301,7 +301,7 @@ source_store_key: {event['store_key']}
 
 - Kakao Event ID: `{event['id']}`
 - 입력 파일: `{event.get('input_path', '')}`
-- DB: `workspace/kms/ledger/kakao/{EVENTS_DB_NAME}`
+- DB: `ledger/kakao/{EVENTS_DB_NAME}`
 """
     return task_id, content
 
@@ -313,9 +313,9 @@ def memo_markdown(event: dict[str, Any]) -> tuple[str, str]:
     memo_id = f"{prefix}-{stamp}-{event['id'][-6:]}"
     content = f"""---
 id: {memo_id}
-kms_layer: processed
-kms_type: memo
-origin: kms
+workspace_layer: processed
+workspace_type: memo
+origin: local-workspace
 source_channel: kakao
 source_chat_id: {event['chat_id']}
 source_input_path: {event.get('input_path', '')}
@@ -333,7 +333,7 @@ source_store_key: {event['store_key']}
 
 - Kakao Event ID: `{event['id']}`
 - 입력 파일: `{event.get('input_path', '')}`
-- DB: `workspace/kms/ledger/kakao/{EVENTS_DB_NAME}`
+- DB: `ledger/kakao/{EVENTS_DB_NAME}`
 """
     return memo_id, content
 
@@ -345,9 +345,9 @@ def hold_markdown(event: dict[str, Any]) -> tuple[str, str]:
     hold_id = f"{prefix}-{stamp}-{event['id'][-6:]}"
     content = f"""---
 id: {hold_id}
-kms_layer: processed
-kms_type: hold
-origin: kms
+workspace_layer: processed
+workspace_type: hold
+origin: local-workspace
 source_channel: kakao
 source_chat_id: {event['chat_id']}
 source_input_path: {event.get('input_path', '')}
@@ -565,7 +565,7 @@ def list_prepared_chat_ids(cli: Path, user_id: str) -> list[str]:
 
 def main() -> int:
     force_utf8_stdio()
-    parser = argparse.ArgumentParser(description="Route KakaoTalk messages into KMS local artifacts.")
+    parser = argparse.ArgumentParser(description="Route KakaoTalk messages into local workspace artifacts.")
     parser.add_argument("--kakao-cli", default=str(default_kakao_cli()))
     parser.add_argument("--user-id", default=DEFAULT_USER_ID)
     parser.add_argument("--chat-id", help="single chat id to process; omit to process all registered rooms")
@@ -620,7 +620,7 @@ def main() -> int:
         "source": args.chat_id or "kakao-all",
         "chat_ids": chat_ids,
         "pulled": pull_result,
-        "kms_paths": {
+        "workspace_paths": {
             "inputs": str(KAKAO_INPUT_DIR),
             "processed_tasks": str(TASKS_DIR),
             "processed_memos": str(MEMOS_DIR),

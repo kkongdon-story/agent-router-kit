@@ -14,15 +14,15 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_SMS_DIR = ROOT / "workspace" / "system" / "sms"
-KMS_DIR = ROOT / "workspace" / "kms"
-SMS_INPUT_DIR = KMS_DIR / "inputs" / "sms"
-KMS_PROCESSED_DIR = KMS_DIR / "processed"
-TASKS_DIR = KMS_PROCESSED_DIR / "tasks"
-FINANCE_DIR = KMS_PROCESSED_DIR / "finance"
-MEMOS_DIR = KMS_PROCESSED_DIR / "memos"
-QUESTIONS_DIR = KMS_PROCESSED_DIR / "questions"
-NOISE_DIR = KMS_PROCESSED_DIR / "noise"
-SMS_DIR = KMS_DIR / "ledger" / "sms"
+LOCAL_WORKSPACE_DIR = ROOT
+SMS_INPUT_DIR = LOCAL_WORKSPACE_DIR / "inputs" / "sms"
+WORKSPACE_PROCESSED_DIR = LOCAL_WORKSPACE_DIR / "processed"
+TASKS_DIR = WORKSPACE_PROCESSED_DIR / "tasks"
+FINANCE_DIR = WORKSPACE_PROCESSED_DIR / "finance"
+MEMOS_DIR = WORKSPACE_PROCESSED_DIR / "memos"
+QUESTIONS_DIR = WORKSPACE_PROCESSED_DIR / "questions"
+NOISE_DIR = WORKSPACE_PROCESSED_DIR / "noise"
+SMS_DIR = LOCAL_WORKSPACE_DIR / "ledger" / "sms"
 RULES_PATH = SMS_DIR / "classification-rules.json"
 LEGACY_RULES_PATH = LEGACY_SMS_DIR / "classification-rules.json"
 DB_PATH = SMS_DIR / "sms-events.sqlite"
@@ -367,11 +367,11 @@ def task_markdown(event: dict[str, Any]) -> tuple[str, str]:
     title = f"문자 문의 확인: {event['redacted_text'][:42]}"
     content = f"""---
 id: {task_id}
-kms_layer: processed
-kms_type: task
+workspace_layer: processed
+workspace_type: task
 status: open
 priority: medium
-origin: kms
+origin: local-workspace
 source_channel: sms
 source_input_path: {event.get('input_path', '')}
 created_at: {now_iso()}
@@ -395,7 +395,7 @@ source_event_id: {event['id']}
 
 - SMS Event ID: `{event['id']}`
 - 입력 파일: `{event.get('input_path', '')}`
-- DB: `workspace/kms/ledger/sms/sms-events.sqlite`
+- DB: `ledger/sms/sms-events.sqlite`
 """
     return task_id, content
 
@@ -405,7 +405,7 @@ def input_markdown(event: dict[str, Any]) -> tuple[str, str]:
     input_id = f"input-sms-{stamp}-{event['id'][-6:]}"
     content = f"""---
 id: {input_id}
-kms_layer: input
+workspace_layer: input
 source_channel: sms
 source: {event['source']}
 received_at: {event['received_at']}
@@ -423,7 +423,7 @@ source_event_id: {event['id']}
 
 {event['redacted_text']}
 
-## KMS 판정 초안
+## Local workspace 판정 초안
 
 - 분류 후보: {event['category']}
 - category_key: {event['category_key']}
@@ -435,13 +435,13 @@ source_event_id: {event['id']}
     return input_id, content
 
 
-def processed_markdown(event: dict[str, Any], artifact_id: str, kms_type: str) -> str:
+def processed_markdown(event: dict[str, Any], artifact_id: str, workspace_type: str) -> str:
     title = f"{event['category']} SMS: {event['redacted_text'][:48]}"
     return f"""---
 id: {artifact_id}
-kms_layer: processed
-kms_type: {kms_type}
-origin: kms
+workspace_layer: processed
+workspace_type: {workspace_type}
+origin: local-workspace
 source_channel: sms
 source_input_path: {event.get('input_path', '')}
 status: captured
@@ -466,7 +466,7 @@ privacy_level: {event['privacy_level']}
 
 - 입력 파일: `{event.get('input_path', '')}`
 - SMS Event ID: `{event['id']}`
-- DB: `workspace/kms/ledger/sms/sms-events.sqlite`
+- DB: `ledger/sms/sms-events.sqlite`
 """
 
 
@@ -498,11 +498,11 @@ def write_task(event: dict[str, Any]) -> str:
 def write_processed(event: dict[str, Any]) -> str:
     if event["action_needed"]:
         return write_task(event)
-    target_dir, kms_type = processed_dir_for_event(event)
+    target_dir, workspace_type = processed_dir_for_event(event)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    artifact_id = f"sms-{kms_type}-{stamp}-{event['id'][-6:]}"
+    artifact_id = f"sms-{workspace_type}-{stamp}-{event['id'][-6:]}"
     path = target_dir / f"{artifact_id}.md"
-    path.write_text(processed_markdown(event, artifact_id, kms_type), encoding="utf-8")
+    path.write_text(processed_markdown(event, artifact_id, workspace_type), encoding="utf-8")
     return str(path.relative_to(ROOT))
 
 
@@ -597,7 +597,7 @@ def self_test() -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Ingest SMS payloads into KMS local SMS ledger.")
+    parser = argparse.ArgumentParser(description="Ingest SMS payloads into the local workspace SMS ledger.")
     parser.add_argument("--json", help="Single JSON payload string.")
     parser.add_argument("--file", help="JSON or JSONL payload file.")
     parser.add_argument("--dry-run", action="store_true", help="Classify only; do not write DB/tasks.")

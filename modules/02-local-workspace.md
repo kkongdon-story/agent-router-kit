@@ -1,28 +1,27 @@
-# Module 02. KMS Workspace
+# Module 02. Local Workspace
 
-KMS workspace is a local operating folder for inputs and processed outputs.
+Local workspace is a local operating folder for inputs and processed outputs.
 
 ## Structure
 
 ```text
-workspace/kms/
-  inputs/
-    slack/
-    sms/
-    kakao/
-    folder/
-  processed/
-    tasks/
-    memos/
-    finance/
-    schedules/
-    content/
-    questions/
-    noise/
-  ledger/
-    sms/
-    kakao/
-    logs/
+inputs/
+  slack/
+  sms/
+  kakao/
+  folder/
+processed/
+  tasks/
+  memos/
+  finance/
+  schedules/
+  content/
+  questions/
+  noise/
+ledger/
+  sms/
+  kakao/
+  logs/
 ```
 
 ## Rule
@@ -33,10 +32,10 @@ Store something only when the user explicitly asks for capture, save, archive, t
 
 ## Recommended Flow
 
-1. Inputs land in `workspace/kms/inputs/<source>`.
+1. Inputs land in `inputs/<source>`.
 2. A classifier decides whether the item is task, memo, finance, schedule, content, question, or noise.
-3. Processed markdown lands in `workspace/kms/processed/<category>`.
-4. Raw event records and logs land in `workspace/kms/ledger/<source>`.
+3. Processed markdown lands in `processed/<category>`.
+4. Raw event records and logs land in `ledger/<source>`.
 
 ## Future Extensions
 
