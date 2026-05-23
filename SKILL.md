@@ -176,8 +176,6 @@ Kakao:
 - `docs/beginner-tutorial.md`: step-by-step tutorial for non-developers.
 - `docs/feature-reference.md`: commands, env variables, aliases, folder layout, and optional modules.
 - `docs/e2e-checklist.md`: fresh install and real Slack connection checklist.
-- `docs/presentation/agent-router-kit-deck.json`: tool-independent presentation JSON.
-- `docs/presentation/agent-router-kit-script.md`: beginner-friendly presentation script.
 
 ## Troubleshooting
 

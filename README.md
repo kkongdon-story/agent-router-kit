@@ -119,8 +119,6 @@ Slack은 기본적으로 조작 인터페이스입니다. 명시적으로 저장
 - `docs/security.md`: 보안 체크리스트
 - `docs/troubleshooting.md`: 자주 막히는 지점
 - `docs/demo-script.md`: 설치 시연 흐름
-- `docs/presentation/agent-router-kit-deck.json`: PPT 제작용 범용 JSON
-- `docs/presentation/agent-router-kit-script.md`: 8분 발표 대본
 
 ## 배포 전 검증
 
